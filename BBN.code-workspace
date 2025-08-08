@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"inlineChat.enableV2": true,
+		"inlineChat.finishOnType": false,
+		"inlineChat.hideOnRequest": false,
+		"inlineChat.notebookAgent": true
+	}
+}
