@@ -1,6 +1,0 @@
-\beamer@sectionintoc {1}{CP Violation in SM Flavour Physics}{3}{0}{1}
-\beamer@sectionintoc {2}{Direct and Indirect Detection Methodology}{3}{0}{2}
-\beamer@sectionintoc {3}{Milestones in CP Violation Detection}{3}{0}{3}
-\beamer@sectionintoc {4}{Theoretical Framework for Baryon Decay}{3}{0}{4}
-\beamer@sectionintoc {5}{Experimental Approach and Results}{9}{0}{5}
-\beamer@sectionintoc {6}{Discussion}{15}{0}{6}
