@@ -462,6 +462,24 @@ def de_per_domega_unscaled(omega, vW, d, tau, show_progress=True, use_parallel=T
     return results[0] if is_scalar else results
 
 @jit(nopython=True)
+def calculate_sigma(v, L, beta, theta_cp):
+    """
+    Computes the surface tension of the bubble wall.
+
+    Args:
+    - v (float): Vacuum expectation value (VEV) of the Higgs field [GeV]
+    - L (float): Bubble wall thickness [GeV^-1]
+    - beta (float): Mixing angle between the two Higgs doublets
+    - theta_cp (float): CP-violating phase parameter
+
+    Returns:
+    - float: Surface tension [GeV^3]
+    """
+    sigma = v**2 / (2 * L) * (1 / 3 + 1 / 10 * np.sin(beta)**2 * theta_cp**2)
+
+    return sigma
+
+@jit(nopython=True)
 def calculate_rhoVac(v, vW, L, R0, beta, theta_cp):
     """
     Computes the vacuum energy density for a 2HDM electroweak phase transition.
@@ -534,35 +552,35 @@ def fit_power_law(x_data, y_data):
 
 def main():
     # PARAMETER DEFINITIONS
-    
+
     # Bubble collision parameters
     d = 100  # Bubble separation distance along the z-axis
     alpha = 1.2  # Scaling factor for time cutoff
+    tau = alpha * d  # Time cutoff for integration
     vW = 1  # Bubble wall velocity (normalized, close to speed of light = 1)
-    
+
     # Physical constants and scales
     v = 246  # GeV - Standard Model Higgs VEV at T=0
     T = 100  # GeV - Critical temperature for first-order phase transition
     M_pl = 1.22e19  # GeV - Planck mass
     G = 1 / M_pl**2  # GeV^-2 - Gravitational constant in natural units
-    
-    # Derived parameters
-    tau = alpha * d  # Time cutoff for integration
-    L = 1 / T  # GeV^-1 - Bubble wall thickness
-    R0 = 10  # Arbitrary unit - Initial bubble radius
-    
+
     # Higgs mixing and CP violation parameters
     beta = np.pi / 4  # Mixing angle between the two Higgs doublets
     v1 = v * np.cos(beta)  # GeV - VEV of first Higgs field
     theta_cp_values = np.array([0, 1])  # CP-violating phase parameters
 
+    # Derived parameters
+    L = 1 / T  # GeV^-1 - Bubble wall thickness
+    sigma_values = [calculate_sigma(v, L, beta, theta_cp) for theta_cp in theta_cp_values]
+    R0_values = [np.sqrt(105 * T / (np.pi * sigma)) for sigma in sigma_values] # GeV^-1 - Initial bubble radius
+
     # CALCULATIONS
     
     # Vectorized vacuum energy density calculations
-    rhoVac_values = np.array([calculate_rhoVac(v, vW, L, R0, beta, theta) 
-                             for theta in theta_cp_values])
-    normalize_factors = np.array([calculate_normalize_factor(G, rhoVac, vW) 
-                                 for rhoVac in rhoVac_values])
+    rhoVac_values = np.array([calculate_rhoVac(v, vW, L, R0_values[i], beta, theta_cp_values[i]) 
+                            for i in range(len(theta_cp_values))])
+    normalize_factors = np.array([calculate_normalize_factor(G, rhoVac, vW) for rhoVac in rhoVac_values])
     
     # HIGGS FIELD PROFILE PLOT
 
@@ -604,15 +622,15 @@ def main():
     plt.show()
     
     # GRAVITATIONAL WAVE SPECTRUM CALCULATION
-    
+
     # Frequency range setup
     n_omega = 500
     omega_min, omega_max = 0.1 / tau, 50.0 / tau
     omega_values = np.logspace(np.log10(omega_min), np.log10(omega_max), n_omega)
-    
+
     # Cache management
     cache_filename = f"gwscaled_d{d}_tau{tau:.1f}_vW{vW}_n{n_omega}.pkl"
-    
+
     # Load or compute spectrum
     de_per_domega_values = None
     if os.path.exists(cache_filename):
@@ -621,16 +639,43 @@ def main():
             with open(cache_filename, "rb") as f:
                 cached_data = pickle.load(f)
             
-            # Verify cache validity
-            if (np.allclose(cached_data["omega_values"], omega_values) and
-                all(cached_data[key] == locals()[key] for key in ["d", "tau", "vW"])):
-                de_per_domega_values = cached_data["de_per_domega_values"]
-                print("Successfully loaded cached spectrum data.")
+            print(f"Cache file loaded successfully. Keys: {cached_data.keys()}")
+            
+            # Check if required keys exist
+            required_keys = ["omega_values", "de_per_domega_values", "d", "tau", "vW"]
+            missing_keys = [key for key in required_keys if key not in cached_data]
+            if missing_keys:
+                print(f"Missing keys in cache: {missing_keys}. Recomputing.")
             else:
-                print("Cached data mismatch. Recomputing.")
-        except (FileNotFoundError, KeyError, pickle.PickleError):
-            print("Cache loading failed. Recomputing.")
-    
+                # Verify cache validity with tolerance for floating point comparison
+                rtol = 1e-10
+                omega_match = np.allclose(cached_data["omega_values"], omega_values, rtol=rtol)
+                param_matches = (
+                    abs(cached_data["d"] - d) < rtol and
+                    abs(cached_data["tau"] - tau) < rtol and 
+                    abs(cached_data["vW"] - vW) < rtol
+                )
+                
+                print(f"Parameter validation - d: {cached_data['d']} vs {d}, tau: {cached_data['tau']} vs {tau}, vW: {cached_data['vW']} vs {vW}")
+                print(f"Omega arrays match: {omega_match}, Parameters match: {param_matches}")
+                
+                if omega_match and param_matches:
+                    de_per_domega_values = cached_data["de_per_domega_values"]
+                    print("Successfully loaded cached spectrum data.")
+                else:
+                    print("Cached data mismatch. Recomputing.")
+                    if not omega_match:
+                        print(f"Omega mismatch: cached length {len(cached_data['omega_values'])}, current length {len(omega_values)}")
+                    
+        except FileNotFoundError:
+            print(f"Cache file {cache_filename} not found. Recomputing.")
+        except (KeyError, pickle.PickleError, EOFError) as e:
+            print(f"Cache loading failed with error: {e}. Recomputing.")
+        except Exception as e:
+            print(f"Unexpected error loading cache: {e}. Recomputing.")
+    else:
+        print(f"Cache file {cache_filename} does not exist. Computing from scratch.")
+
     # Compute spectrum if needed
     if de_per_domega_values is None:
         print("Computing gravitational wave spectrum.")
@@ -650,74 +695,73 @@ def main():
         print(f"Spectrum saved to {cache_filename}")
 
     # DATA PROCESSING AND FILTERING
-    
+
     # Filter valid data points
     valid_mask = np.isfinite(de_per_domega_values) & (de_per_domega_values > 0)
     if not np.any(valid_mask):
         print("Warning: No valid data points found in spectrum.")
-        return
-    
+
     # Apply filtering
     omega_values_filtered = omega_values[valid_mask]
     de_per_domega_filtered = de_per_domega_values[valid_mask]
-    
+
     # Normalize spectra for different CP phases
-    normalized_spectra = normalize_factors[:, np.newaxis] * de_per_domega_filtered[np.newaxis, :]
-    
+    normalized_spectra = tau**-5 * normalize_factors[:, np.newaxis] * de_per_domega_filtered[np.newaxis, :]
+
     # POWER LAW ANALYSIS
-    
+
     omega_tau = omega_values_filtered * tau
     n_points = len(omega_tau)
     peak_idx = np.argmax(de_per_domega_filtered)
-    
-    # Define fitting ranges
+
+    # Define fitting ranges (5% at start and end)
     fit_fraction = 0.05
     low_freq_end = max(3, int(fit_fraction * n_points))
     high_freq_start = min(n_points - 3, int((1 - fit_fraction) * n_points))
-    
+
     # Perform power law fits
     low_power, _ = fit_power_law(omega_tau[:low_freq_end], de_per_domega_filtered[:low_freq_end])
     high_power, _ = fit_power_law(omega_tau[high_freq_start:], de_per_domega_filtered[high_freq_start:])
-    
+
     # SPECTRUM PLOTTING
-    
+
     fig, ax = plt.subplots(figsize=(8, 6))
-    
+
     # Plot spectra for different CP phases
     spectrum_labels = [r"$\theta_{CP}=0$", f"$\\theta_{{CP}}={theta_cp_values[1]}$"]
     plotted_values = []
-    
+
     for i, (spectrum, label) in enumerate(zip(normalized_spectra, spectrum_labels)):
         ax.loglog(omega_tau, spectrum, label=label)
         ax.loglog(omega_tau[peak_idx], spectrum[peak_idx], marker="x", color="black")
         plotted_values.append(spectrum)
-    
+
     # Add peak annotation
     min_peak_value = min(spectrum[peak_idx] for spectrum in plotted_values)
     ax.annotate(f"$\\omega\\tau={omega_tau[peak_idx]:.2f}$", 
-               xy=(omega_tau[peak_idx], min_peak_value),
-               xytext=(omega_tau[peak_idx], min_peak_value * 0.3),
-               fontsize=12, ha="center")
-    
+                xy=(omega_tau[peak_idx], min_peak_value),
+                xytext=(omega_tau[peak_idx], min_peak_value * 0.3),
+                fontsize=12, ha="center")
+
     # Add power law annotations
     power_law_annotations = [
         (low_power, (0.05, 0.1), "lower left"),
         (high_power, (0.95, 0.7), "upper right")
     ]
-    
+
     for power, (x_pos, y_pos), position in power_law_annotations:
         if power is not None:
             ha = "right" if "right" in position else "left"
             ax.text(x_pos, y_pos, rf"$\propto (\omega\tau)^{{{power:.2f}}}$", 
-                   transform=ax.transAxes, fontsize=14, color="black", ha=ha)
-    
+                    transform=ax.transAxes, fontsize=14, color="black", ha=ha)
+
     # Format spectrum plot
     ax.set_xlabel(r"$\omega\tau$", fontsize=14)
-    ax.set_ylabel(r"$\frac{dE}{d\ln\omega}$", fontsize=14)
+    ax.set_ylabel(r"$\tau^{-5}\frac{dE}{d\ln(\omega\tau)}$", fontsize=14)
     ax.set_title("Gravitational Wave Spectrum from Two-Bubble Collision", fontsize=14)
     ax.set_xlim([omega_tau[0], omega_tau[-1]])
     ax.legend(loc="best", fontsize=10)
-    
+
     plt.tight_layout()
     plt.savefig("Figure/gwplot_twobubble.png", dpi=300, bbox_inches="tight")
     plt.show()
