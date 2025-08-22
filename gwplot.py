@@ -492,7 +492,7 @@ def calculate_rhoVac(v, vW, L, R0, beta, theta_cp):
     Returns:
     - float: Vacuum energy density [GeV^4]
     """
-    rhoVac = v**2 * (1 + vW**2) / (L * R0 * vW) * (1 / 2 + 3 / 20 * np.sin(beta)**2 * theta_cp**2)
+    rhoVac = v**2 * vW / (R0 * L) * (1 + 3 / 10 * np.sin(beta)**2 * theta_cp**2)
 
     return rhoVac
 
@@ -587,39 +587,41 @@ def main():
     # Create spatial coordinate array and calculate field profile
     xi_range = np.linspace(-10*L, 10*L, 1000)
     h1_values = hi(v1, xi_range, L)
-    
-    # Create Higgs field plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(xi_range, h1_values, "b-", label=f"$h_1(\\xi)$: $v_1 = {v1:.4g}$ GeV, $L = {L:.3g}$ GeV$^{{-1}}$")
-    
-    # Add reference lines
-    reference_lines = [
-        (v1, "red", "--", "Broken phase"),
-        (v1/2, "green", ":", "Wall center"),
-        (0, "black", "--", "Symmetric phase")
-    ]
-    for y_val, color, style, label in reference_lines:
-        ax.axhline(y=y_val, color=color, linestyle=style, alpha=0.4, label=label)
-    
-    ax.axvline(x=0, color="gray", linestyle=":", alpha=0.3)
-    
-    # Add phase annotations
-    annotations = [
-        ("Broken Phase\n(True Vacuum)", (-4*L, 0.85*v1), "lightcoral"),
-        ("Symmetric Phase\n(False Vacuum)", (4*L, 0.1*v1), "lightyellow")
-    ]
-    for text, (x, y), color in annotations:
-        ax.annotate(text, xy=(x, y), fontsize=11, ha="center",
-                   bbox=dict(boxstyle="round,pad=0.4", facecolor=color, alpha=0.8))
-    
-    # Format Higgs plot
-    ax.set_xlabel("$\\xi$ [GeV$^{-1}$] (Spatial coordinate in wall rest frame)", fontsize=12)
-    ax.set_ylabel("$h_1(\\xi)$ [GeV] (Higgs field amplitude)", fontsize=12)
-    ax.set_title("Higgs Field Profile in 2HDM Bubble Wall\n(First-Order Phase Transition)", 
-                fontsize=14, pad=15)
-    ax.legend(fontsize=10, loc="center right")
-    plt.tight_layout()
-    plt.show()
+
+    plot_higgs = False
+    if plot_higgs:
+        # Create Higgs field plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(xi_range, h1_values, "b-", label=f"$h_1(\\xi)$: $v_1 = {v1:.4g}$ GeV, $L = {L:.3g}$ GeV$^{{-1}}$")
+        
+        # Add reference lines
+        reference_lines = [
+            (v1, "red", "--", "Broken phase"),
+            (v1/2, "green", ":", "Wall center"),
+            (0, "black", "--", "Symmetric phase")
+        ]
+        for y_val, color, style, label in reference_lines:
+            ax.axhline(y=y_val, color=color, linestyle=style, alpha=0.4, label=label)
+        
+        ax.axvline(x=0, color="gray", linestyle=":", alpha=0.3)
+        
+        # Add phase annotations
+        annotations = [
+            ("Broken Phase\n(True Vacuum)", (-4*L, 0.85*v1), "lightcoral"),
+            ("Symmetric Phase\n(False Vacuum)", (4*L, 0.1*v1), "lightyellow")
+        ]
+        for text, (x, y), color in annotations:
+            ax.annotate(text, xy=(x, y), fontsize=11, ha="center",
+                    bbox=dict(boxstyle="round,pad=0.4", facecolor=color, alpha=0.8))
+        
+        # Format Higgs plot
+        ax.set_xlabel("$\\xi$ [GeV$^{-1}$] (Spatial coordinate in wall rest frame)", fontsize=12)
+        ax.set_ylabel("$h_1(\\xi)$ [GeV] (Higgs field amplitude)", fontsize=12)
+        ax.set_title("Higgs Field Profile in 2HDM Bubble Wall\n(First-Order Phase Transition)", 
+                    fontsize=14, pad=15)
+        ax.legend(fontsize=10, loc="center right")
+        plt.tight_layout()
+        plt.show()
     
     # GRAVITATIONAL WAVE SPECTRUM CALCULATION
 
@@ -728,7 +730,7 @@ def main():
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Plot spectra for different CP phases
-    spectrum_labels = [r"$\theta_{CP}=0$", f"$\\theta_{{CP}}={theta_cp_values[1]}$"]
+    spectrum_labels = [r"$\Delta\theta=0$", rf"$\Delta\theta={theta_cp_values[1]}$"]
     plotted_values = []
 
     for i, (spectrum, label) in enumerate(zip(normalized_spectra, spectrum_labels)):
@@ -757,7 +759,7 @@ def main():
 
     # Format spectrum plot
     ax.set_xlabel(r"$\omega\tau$", fontsize=14)
-    ax.set_ylabel(r"$\tau^{-5}\frac{dE}{d\ln(\omega\tau)}$", fontsize=14)
+    ax.set_ylabel(r"$\tau^{-5}\frac{dE}{d\ln(\omega\tau)}$ [GeV$^8$]", fontsize=14)
     ax.set_title("Gravitational Wave Spectrum from Two-Bubble Collision", fontsize=14)
     ax.set_xlim([omega_tau[0], omega_tau[-1]])
     ax.legend(loc="best", fontsize=10)
